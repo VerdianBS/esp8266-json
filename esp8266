@@ -1,0 +1,98 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <ArduinoJson.h>
+
+#ifndef STASSID
+#define STASSID "Failure Network"
+#define STAPSK "Widuri50115"
+#endif
+
+const char* ssid = STASSID;
+const char* pass = STAPSK;
+
+const char* host = "api.dev.alenxi.id";
+const uint16_t port = 80;
+
+String respone;
+
+void setup() {
+  Serial1.begin(115200);
+
+  Serial1.println();
+  Serial1.print("Menyambungkan ke ");
+  Serial1.println(ssid);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, pass);
+
+  while (WiFi.status() != WL_CONNECTED){
+    delay(500);
+    Serial1.print(".");
+  }
+
+  Serial1.println("");
+  Serial1.println("WiFi Tersambung...");
+  Serial1.println("IP Address: ");
+  Serial1.println(WiFi.localIP());
+}
+
+void loop() {
+  Serial1.print("Connecting to ");
+  Serial1.print(host);
+  Serial1.print(':');
+  Serial1.println(port);
+
+  WiFiClient client;
+  if(!client.connect(host, port)){
+    Serial1.println("connection failed!");
+    delay(5000);
+    return;
+  }
+
+  if(client.connected()){
+    Serial1.println("connected!");
+  }
+
+  HTTPClient http;
+  Serial1.print("[HTTP] begin...\n");
+  http.begin(client, "http://api.dev.alenxi.id/sensors/sensorStatus?sensor_code=SR-011&key=ax212");
+   http.setAuthorization("admin","1234");
+    Serial1.print("[HTTP] GET...\n");
+    int httpCode = http.GET();
+    if(httpCode > 0){
+      Serial1.printf("[HTTP] GET... code: %d\n", httpCode);
+      if(httpCode == HTTP_CODE_OK /*|| httpCode == HTTP_CODE_MOVED_PERMANENTLY*/){
+        String respone = http.getString();
+        Serial1.println(respone);
+        
+         
+         //SETTING KAPASITAS FILE JSON
+        const size_t capacity = JSON_OBJECT_SIZE(10) + 6;
+        DynamicJsonDocument doc(capacity);
+
+        //PARSE JSON OBJECT
+        DeserializationError error = deserializeJson(doc, http.getString());
+        if (error){
+          Serial1.printf("deserializeJson() failed: ");
+          Serial1.println(error.f_str());
+          //Client.stop();
+          return;
+        }
+        // Extract values
+        //Serial.println(doc["data"]["sensor_code"].as<const char*>());
+        const char* kode = doc["data"]["sensor_code"];
+        int kondisi = doc["data"]["is_active"];
+        Serial1.println(kode);
+        Serial1.println(kondisi);
+
+        if(kode == "SR-011" && kondisi == 0){
+          Serial.println("0");
+        }
+      }
+    } else {
+      Serial1.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
+    }
+    http.end();
+
+  delay(5000);
+}
